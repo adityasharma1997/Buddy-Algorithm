@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <math.h>
@@ -10,6 +11,8 @@
 
 #define PAGESIZE sysconf(_SC_PAGESIZE)
 #define MIN_BLOCK 8
+
+pthread_mutex_t lock;
 
 typedef struct meta_data{
     size_t block_size;
@@ -29,6 +32,7 @@ void popFront(int index){
 }
 
 void split(int index){
+    pthread_mutex_lock(&lock);
     meta_data *temp = block_list[index];
     popFront(index);
     meta_data *temp2 = (meta_data *)((char *)(temp) +((temp->block_size)/2));
@@ -40,6 +44,7 @@ void split(int index){
     temp2->next=NULL;
     temp2->allocation_size=0;
     block_list[index-1]=temp;
+    pthread_mutex_unlock(&lock);
     // we are supposing the smaller list will never be present that's why we directl pointing it.
 
 }
@@ -70,9 +75,11 @@ void *custom_malloc(size_t user_size){
         index++;
     }
    // index--;
+    pthread_mutex_lock(&lock);
     if(block_list[index]){
             //allocate and pop
             info=block_list[index];
+            pthread_mutex_unlock(&lock);
             popFront(index);
             info->isFree=0;
             info->allocation_size=total_size;
@@ -84,7 +91,7 @@ void *custom_malloc(size_t user_size){
         while(index<=12){
             if(block_list[index]){
                 split(index);
-
+		pthread_mutex_unlock(&lock);
                 return custom_malloc(user_size);
 
             }
@@ -106,7 +113,7 @@ void *custom_malloc(size_t user_size){
   
 
     block_list[12]=info;
-
+    pthread_mutex_unlock(&lock);
     return custom_malloc(user_size);
 
     
@@ -114,9 +121,11 @@ void *custom_malloc(size_t user_size){
 }
 
 void pushFront(int index,meta_data *block){
+    pthread_mutex_lock(&lock);
     block->next = block_list[index];
     block_list[index]=block;
     block->isFree=1;
+    pthread_mutex_unlock(&lock);
 }
 
 int power(int x,int y) {
