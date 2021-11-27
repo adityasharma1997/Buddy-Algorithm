@@ -1,7 +1,7 @@
-To Run
+		To Run
 		open the terminal in the same folder as the code files and type the command 'make all'
 		to execute the file type the command ./testing	
-	(make file will compile the t-tes1.c file using our custom malloc library which is the test file provided in the project problem 		document)
+		(make file will compile the t-tes1.c file using our custom malloc library which is the test file provided in the project problem 				document)
 		
 	
 	Design Overview
