@@ -25,8 +25,8 @@ void *malloc(size_t user_size){
     int index = 3;
     int block_size = MIN_BLOCK;
     while(block_size<total_size){
-        block_size*=2;
-        index++;
+        block_size=block_size*2;
+        index=index+1;
     }
    pthread_mutex_lock(&lock);
     if(Arena.block_list[index]){

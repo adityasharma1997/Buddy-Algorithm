@@ -1,7 +1,8 @@
 #include "malloc.h"
 
 void popFront(int index){
-    meta_data *node = Arena.block_list[index];
+    meta_data *node;
+    node = Arena.block_list[index];
     Arena.block_list[index]=node->next;
     node->next=NULL;
 }
