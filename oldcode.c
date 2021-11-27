@@ -1,8 +1,18 @@
-#include "malloc.h"
-#include<pthread.h>
+// #include <stdio.h>
+// #include <unistd.h>
+// #include <sys/mman.h>
+// #include <pthread.h>
+// #include <stdbool.h>
+// #include <stdint.h>
+// #include <math.h>
+// #include <string.h>
+// #include <errno.h>
+# include "malloc.h"
 
-pthread_mutex_t lock;
+// #define PAGESIZE sysconf(_SC_PAGESIZE)
+// #define MIN_BLOCK 8
 
+ pthread_mutex_t lock;
 
 // typedef struct meta_data{
 //     size_t block_size;
@@ -15,20 +25,15 @@ pthread_mutex_t lock;
 
 // meta_data *block_list[13];
 
-void print_msg(const char *buf)
-{
-    write(STDOUT_FILENO, buf, strlen(buf) + 1);
-}
-
 void popFront(int index){
-    meta_data *node = Arena.block_list[index];
-    Arena.block_list[index]=node->next;
+    meta_data *node = block_list[index];
+    block_list[index]=node->next;
     node->next=NULL;
 }
 
 void split(int index){
-    // pthread_mutex_lock(&lock);
-    meta_data *temp = Arena.block_list[index];
+    //pthread_mutex_lock(&lock);
+    meta_data *temp = block_list[index];
     popFront(index);
     meta_data *temp2 = (meta_data *)((char *)(temp) +((temp->block_size)/2));
     temp->block_size=temp->block_size/2;
@@ -38,8 +43,8 @@ void split(int index){
     temp->next=temp2;
     temp2->next=NULL;
     temp2->allocation_size=0;
-    Arena.block_list[index-1]=temp;
-//    pthread_mutex_unlock(&lock);
+    block_list[index-1]=temp;
+    //pthread_mutex_unlock(&lock);
     // we are supposing the smaller list will never be present that's why we directl pointing it.
 
 }
@@ -49,8 +54,7 @@ void *malloc(size_t user_size){
     void *ptr;
     size_t total_size = user_size + sizeof(meta_data);
     if(total_size<=sizeof(meta_data)){      // when user asked for 0
-        //printf("User asked for invalid size");
-       // print_msg();
+        printf("User asked for invalid size");
         return NULL;
     }
     if(total_size>PAGESIZE){
@@ -71,24 +75,22 @@ void *malloc(size_t user_size){
         index++;
     }
    // index--;
-   pthread_mutex_lock(&lock);
-    if(Arena.block_list[index]){
+    pthread_mutex_lock(&lock);
+    if(block_list[index]){
             //allocate and pop
-            info=Arena.block_list[index];
-            // pthread_mutex_unlock(&lock);
+            info=block_list[index];
+            
             popFront(index);
             pthread_mutex_unlock(&lock);
             info->isFree=0;
             info->allocation_size=total_size;
             ptr = (void *)((char *)info+sizeof(meta_data));
-
-            if (Arena.heap == NULL) Arena.heap = ptr;
             return ptr;
     }
     else{
         index++;
         while(index<=12){
-            if(Arena.block_list[index]){
+            if(block_list[index]){
                 split(index);
 		pthread_mutex_unlock(&lock);
                 return malloc(user_size);
@@ -100,7 +102,7 @@ void *malloc(size_t user_size){
     }
     info=sbrk(PAGESIZE);
      if (info == (void *)-1) {
-         //printf("Allocation error");
+         printf("Allocation error");
         return info;
     }
     
@@ -111,21 +113,18 @@ void *malloc(size_t user_size){
 
   
 
-    Arena.block_list[12]=info;
+    block_list[12]=info;
     pthread_mutex_unlock(&lock);
-   return malloc(user_size);
+    return malloc(user_size);
 
-}
+    
 
-__attribute__((constructor)) void init() {
-  Arena.heap = NULL;
-  pthread_mutex_init(&lock, NULL);
 }
 
 void pushFront(int index,meta_data *block){
-    //pthread_mutex_lock(&lock);
-    block->next = Arena.block_list[index];
-    Arena.block_list[index]=block;
+   // pthread_mutex_lock(&lock);
+    block->next = block_list[index];
+    block_list[index]=block;
     block->isFree=1;
     //pthread_mutex_unlock(&lock);
 }
@@ -153,19 +152,6 @@ meta_data *getBuddy(meta_data *block){
     return b;
 }
 
-
-// int log_2(int n) {
-//   int i = 0;
-//   while (n >> (i + 1)) i++;
-//   return i;
-// }
-
-// meta_data *getBuddy(meta_data *block) {
-//   unsigned long offset = (unsigned long)(((char *)block) - (char *)Arena.heap);
-//   unsigned long mask = (unsigned long)(0x1 << log_2(block->allocation_size));
-//   return (meta_data *)((offset ^ mask) + (char *)Arena.heap);
-// }
-
 void merge(meta_data *block){
     size_t limit =block->block_size;
     int i=8;
@@ -191,11 +177,9 @@ void merge(meta_data *block){
         return;
     }
     meta_data *current;
-    current = Arena.block_list[index];
+    current = block_list[index];
     if(current==buddy){
-       // pthread_mutex_lock(&lock);
         popFront(index);
-        //pthread_mutex_unlock(&lock);
     }else if(current!=buddy){
         while(current->next!=buddy){
             meta_data *temp;
@@ -210,6 +194,7 @@ void merge(meta_data *block){
     
     if (block < buddy) {
     block->block_size = block->block_size*2;
+    
     merge(block);
   } else if(block>=buddy) {
     buddy->block_size = buddy->block_size* 2;
@@ -294,13 +279,12 @@ void *reallocarray(void *ptr, size_t nmemb, size_t size) {
 void *memalign(size_t alignment, size_t size){
         void *temp;
         void *temp2;
-        void *base;
         temp=malloc(size+alignment+sizeof(meta_data));
         temp2=temp;
         if(temp!=NULL){
             void *newone;
-            base = (char*)temp + sizeof(meta_data);
-            unsigned long len = (unsigned long)base;
+
+            unsigned long len = (unsigned long)temp;
             unsigned long a = len%(unsigned long)alignment;
             len = len-a;
             if(a!=0){
@@ -330,24 +314,3 @@ int posix_memalign(void **memptr, size_t alignment, size_t size){
     return errno;
   }
 }
-
-
-// int main(int argc, char **argv)
-// {
-//   size_t size = 120;
-//   void *mem = custom_malloc(size);
-//   size_t size1 = 120;
-//   void *mem1 = custom_malloc(size);
-//   size_t size2 = 252;
-//   void *mem2 = custom_malloc(size);
-//   size_t size3 = 120;
-//   void *mem3 = custom_malloc(size);
-//   printf("Successfully malloc'd %zu bytes at addr %p\n", size, mem);
-//   printf("Successfully malloc'd %zu bytes at addr %p\n", size1, mem1);
-//   printf("Successfully malloc'd %zu bytes at addr %p\n", size2, mem2);
-//   printf("Successfully malloc'd %zu bytes at addr %p\n", size3, mem3);
-//   //assert(mem != NULL);
-//   free(mem);
-//   printf("Successfully free'd %zu bytes from addr %p\n", size, mem);
-//   return 0;
-// }
